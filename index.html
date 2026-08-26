@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rótulo Diário — Contador de Calorias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="greeting">
+    <h1 id="greetingText">—</h1>
+    <div class="date" id="greetingDate">—</div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button class="tab-btn" data-tab="diario">Diário</button>
+    <button class="tab-btn" data-tab="alimentos">Alimentos</button>
+    <button class="tab-btn" data-tab="atividades">Atividades</button>
+    <button class="tab-btn" data-tab="mensal">Resumo Mensal</button>
+    <button class="tab-btn" data-tab="perfil">Perfil</button>
+  </div>
+
+  <div id="app" class="loading">Carregando seus dados…</div>
+
+</div>
+
+<div id="toast"><span id="toastMsg"></span><button id="toastUndoBtn">Desfazer</button></div>
+
+<script src="script.js"></script>
+</body>
+</html>
