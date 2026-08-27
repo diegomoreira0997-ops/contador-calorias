@@ -14,6 +14,12 @@ function round(n){ return Math.round(n*10)/10; }
 function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
 
 function food(name,kcal,protein,carb,fat){ return {id:uid(), name, kcal, protein, carb, fat}; }
+
+// ---------- Supabase ----------
+const SUPABASE_URL = 'https://enihoxjbztkhsjmrqrmz.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_JXULLB5vZ-Fvga90Ougspg_fSt3i6Xa';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let USER_ID = null; // definido após login, a partir da sessão autenticada
 const DEFAULT_FOODS = [
   food("Arroz branco cozido", 128, 2.5, 28, 0.2),
   food("Arroz integral cozido", 124, 2.6, 25.8, 1),
@@ -322,7 +328,7 @@ function tagHtml(cat){
 let state = {
   foods: [], targets: {...DEFAULT_TARGETS}, currentDate: todayStr(), log: [],
   routines: [], bodyweight: DEFAULT_BODYWEIGHT, activities: [],
-  profileName: 'Diego', profileStats: {...DEFAULT_PROFILE_STATS}
+  profileName: '', profileStats: {...DEFAULT_PROFILE_STATS}
 };
 let currentTab = 'diario';
 let dailyFilter = 'todos';
@@ -335,47 +341,143 @@ let pendingDelete = null;
 let toastTimer = null;
 
 
+let authMode = 'login'; // 'login' | 'signup'
+let authEmail = '';
+
+function showAuthLoading(show){
+  document.getElementById('authLoading').style.display = show ? 'block' : 'none';
+}
+function showAuthScreen(){
+  showAuthLoading(false);
+  document.getElementById('mainWrap').style.display = 'none';
+  document.getElementById('authWrap').style.display = 'block';
+  wireAuthForm();
+}
+function showMainApp(){
+  showAuthLoading(false);
+  document.getElementById('authWrap').style.display = 'none';
+  document.getElementById('mainWrap').style.display = 'block';
+}
+
+function wireAuthForm(){
+  const titleEl = document.getElementById('authTitle');
+  const submitBtn = document.getElementById('authSubmitBtn');
+  const toggleText = document.getElementById('authToggleText');
+  const toggleBtn = document.getElementById('authToggleBtn');
+  const msg = document.getElementById('authMsg');
+
+  function applyMode(){
+    titleEl.textContent = authMode==='login' ? 'Entrar' : 'Criar conta';
+    submitBtn.textContent = authMode==='login' ? 'Entrar' : 'Criar conta';
+    toggleText.textContent = authMode==='login' ? 'Ainda não tem conta?' : 'Já tem conta?';
+    toggleBtn.textContent = authMode==='login' ? 'Criar conta' : 'Entrar';
+    msg.textContent = ''; msg.className = 'msg';
+  }
+  applyMode();
+
+  toggleBtn.onclick = ()=>{ authMode = authMode==='login' ? 'signup' : 'login'; applyMode(); };
+
+  submitBtn.onclick = async ()=>{
+    const email = document.getElementById('authEmail').value.trim();
+    const password = document.getElementById('authPassword').value;
+    if(!email || password.length<6){
+      msg.textContent = 'Informe um e-mail válido e uma senha com pelo menos 6 caracteres.';
+      msg.className = 'msg err';
+      return;
+    }
+    submitBtn.disabled = true;
+    if(authMode==='login'){
+      const { error } = await sb.auth.signInWithPassword({email, password});
+      submitBtn.disabled = false;
+      if(error){ msg.textContent = 'E-mail ou senha inválidos.'; msg.className = 'msg err'; return; }
+      // onAuthStateChange cuida do resto
+    } else {
+      const { data, error } = await sb.auth.signUp({email, password});
+      submitBtn.disabled = false;
+      if(error){ msg.textContent = 'Não foi possível criar a conta: ' + error.message; msg.className = 'msg err'; return; }
+      if(data.session){
+        // confirmação de e-mail desativada no projeto — já entra direto
+      } else {
+        msg.textContent = 'Conta criada! Confira seu e-mail pra confirmar antes de entrar.';
+        msg.className = 'msg';
+      }
+    }
+  };
+}
+
+async function logout(){
+  await sb.auth.signOut();
+}
+
+let initialAuthResolved = false;
+
+sb.auth.onAuthStateChange((event, session)=>{
+  applyAuthSession(session);
+});
+
+// Reforço: garante a decisão inicial (login vs app) mesmo se o evento acima
+// não disparar imediatamente nesse ambiente/navegador.
+sb.auth.getSession().then(({data})=>{
+  if(!initialAuthResolved) applyAuthSession(data.session);
+});
+
+function applyAuthSession(session){
+  initialAuthResolved = true;
+  if(session && session.user){
+    USER_ID = session.user.id;
+    authEmail = session.user.email || '';
+    showMainApp();
+    loadAll();
+  } else {
+    USER_ID = null;
+    authEmail = '';
+    showAuthScreen();
+  }
+}
+
+showAuthLoading(true);
+
 async function loadAll(){
-  try{
-    const r = await window.storage.get('foods').catch(()=>null);
-    state.foods = (r && r.value) ? JSON.parse(r.value) : DEFAULT_FOODS;
-    if(!r) await window.storage.set('foods', JSON.stringify(state.foods));
-  }catch(e){ state.foods = DEFAULT_FOODS; }
+  // Alimentos: se a tabela estiver vazia (primeiro uso), semeia com a base padrão
+  let { data: foods } = await sb.from('foods').select('*').eq('user_id', USER_ID).order('name');
+  if(!foods || foods.length===0){
+    const seed = DEFAULT_FOODS.map(f=>({user_id:USER_ID, name:f.name, kcal:f.kcal, protein:f.protein, carb:f.carb, fat:f.fat}));
+    const { data: inserted } = await sb.from('foods').insert(seed).select();
+    foods = inserted || [];
+  }
+  state.foods = foods.map(mapFoodRow);
 
-  try{
-    const r = await window.storage.get('targets').catch(()=>null);
-    if(r && r.value){ state.targets = JSON.parse(r.value); }
-    else { await window.storage.set('targets', JSON.stringify(state.targets)); }
-  }catch(e){}
+  // Metas diárias
+  let { data: targets } = await sb.from('targets').select('*').eq('user_id', USER_ID).maybeSingle();
+  if(!targets){
+    const { data: inserted } = await sb.from('targets').insert({user_id:USER_ID, ...DEFAULT_TARGETS}).select().single();
+    targets = inserted;
+  }
+  state.targets = {kcal:targets.kcal, protein:targets.protein, carb:targets.carb, fat:targets.fat};
 
-  try{
-    const r = await window.storage.get('routines').catch(()=>null);
-    state.routines = (r && r.value) ? JSON.parse(r.value) : DEFAULT_ROUTINES;
-    if(!r) await window.storage.set('routines', JSON.stringify(state.routines));
-  }catch(e){ state.routines = DEFAULT_ROUTINES; }
+  // Rotinas de treino
+  let { data: routines } = await sb.from('routines').select('*').eq('user_id', USER_ID).order('name');
+  if(!routines || routines.length===0){
+    const seed = DEFAULT_ROUTINES.map(r=>({user_id:USER_ID, name:r.name, duration:r.duration, intensity:r.intensity}));
+    const { data: inserted } = await sb.from('routines').insert(seed).select();
+    routines = inserted || [];
+  }
+  state.routines = routines.map(mapRoutineRow);
 
-  try{
-    const r = await window.storage.get('bodyweight').catch(()=>null);
-    if(r && r.value){ state.bodyweight = JSON.parse(r.value); }
-    else { await window.storage.set('bodyweight', JSON.stringify(state.bodyweight)); }
-  }catch(e){}
-
-  try{
-    const r = await window.storage.get('profileName').catch(()=>null);
-    if(r && r.value){ state.profileName = JSON.parse(r.value); }
-    else { await window.storage.set('profileName', JSON.stringify(state.profileName)); }
-  }catch(e){}
-
-  try{
-    const r = await window.storage.get('profileStats').catch(()=>null);
-    if(r && r.value){ state.profileStats = JSON.parse(r.value); }
-    else { await window.storage.set('profileStats', JSON.stringify(state.profileStats)); }
-  }catch(e){}
-
-  try{
-    const r = await window.storage.get('recentFoods').catch(()=>null);
-    state.recentFoods = (r && r.value) ? JSON.parse(r.value) : [];
-  }catch(e){ state.recentFoods = []; }
+  // Perfil (nome, peso, dados da calculadora, alimentos recentes)
+  let { data: profile } = await sb.from('profile').select('*').eq('user_id', USER_ID).maybeSingle();
+  if(!profile){
+    const { data: inserted } = await sb.from('profile').insert({
+      user_id: USER_ID, name: state.profileName, bodyweight: DEFAULT_BODYWEIGHT,
+      height: DEFAULT_PROFILE_STATS.height, age: DEFAULT_PROFILE_STATS.age, sex: DEFAULT_PROFILE_STATS.sex,
+      activity_level: DEFAULT_PROFILE_STATS.activity, goal: DEFAULT_PROFILE_STATS.goal, recent_foods: []
+    }).select().single();
+    profile = inserted;
+  }
+  state.profileName = profile.name || '';
+  state.bodyweight = profile.bodyweight;
+  state.profileStats = {height:profile.height, age:profile.age, sex:profile.sex, activity:profile.activity_level, goal:profile.goal};
+  state.recentFoods = profile.recent_foods || [];
 
   await loadLogForDate(state.currentDate);
   await loadActivitiesForDate(state.currentDate);
@@ -383,37 +485,43 @@ async function loadAll(){
   render();
 }
 
+function mapFoodRow(r){ return {id:r.id, name:r.name, kcal:r.kcal, protein:r.protein, carb:r.carb, fat:r.fat}; }
+function mapRoutineRow(r){ return {id:r.id, name:r.name, duration:r.duration, intensity:r.intensity}; }
+function mapLogRow(r){ return {id:r.id, foodId:r.food_id, name:r.name, grams:r.grams, kcal:r.kcal, protein:r.protein, carb:r.carb, fat:r.fat}; }
+function mapActivityRow(r){ return {id:r.id, routineId:r.routine_id, name:r.name, intensity:r.intensity, duration:r.duration, kcal:r.kcal}; }
+
 // Busca os dados sem mutar o estado global — usado com controle de concorrência em goToDate().
 async function fetchLogForDate(dateStr){
-  try{
-    const r = await window.storage.get('log:'+dateStr).catch(()=>null);
-    return (r && r.value) ? JSON.parse(r.value) : [];
-  }catch(e){ return []; }
+  const { data, error } = await sb.from('daily_logs').select('*').eq('user_id', USER_ID).eq('log_date', dateStr).order('created_at');
+  if(error){ console.error(error); return []; }
+  return (data||[]).map(mapLogRow);
 }
 async function fetchActivitiesForDate(dateStr){
-  try{
-    const r = await window.storage.get('activities:'+dateStr).catch(()=>null);
-    return (r && r.value) ? JSON.parse(r.value) : [];
-  }catch(e){ return []; }
+  const { data, error } = await sb.from('activities').select('*').eq('user_id', USER_ID).eq('activity_date', dateStr).order('created_at');
+  if(error){ console.error(error); return []; }
+  return (data||[]).map(mapActivityRow);
 }
 // Mantidas para compatibilidade com o carregamento inicial (loadAll), que não corre risco de concorrência.
 async function loadLogForDate(dateStr){ state.log = await fetchLogForDate(dateStr); }
 async function loadActivitiesForDate(dateStr){ state.activities = await fetchActivitiesForDate(dateStr); }
-async function saveFoods(){ await window.storage.set('foods', JSON.stringify(state.foods)).catch(()=>{}); }
-async function saveTargets(){ await window.storage.set('targets', JSON.stringify(state.targets)).catch(()=>{}); }
-async function saveLog(){ await window.storage.set('log:'+state.currentDate, JSON.stringify(state.log)).catch(()=>{}); }
-async function saveRoutines(){ await window.storage.set('routines', JSON.stringify(state.routines)).catch(()=>{}); }
-async function saveBodyweight(){ await window.storage.set('bodyweight', JSON.stringify(state.bodyweight)).catch(()=>{}); }
-async function saveRecentFoods(){ await window.storage.set('recentFoods', JSON.stringify(state.recentFoods)).catch(()=>{}); }
+
+async function saveTargets(){ await sb.from('targets').upsert({user_id:USER_ID, ...state.targets}).select(); }
+async function saveRoutines(){ /* rotinas são persistidas individualmente (insert/delete) — ver wireAtividades */ }
+async function saveBodyweight(){ await sb.from('profile').update({bodyweight: state.bodyweight}).eq('user_id', USER_ID); }
+async function saveRecentFoods(){ await sb.from('profile').update({recent_foods: state.recentFoods}).eq('user_id', USER_ID); }
 function registerFoodUsage(foodId, grams){
   state.recentFoods = state.recentFoods.filter(r=>r.foodId!==foodId);
   state.recentFoods.unshift({foodId, lastGrams: grams});
   state.recentFoods = state.recentFoods.slice(0, 10);
   saveRecentFoods();
 }
-async function saveProfileName(){ await window.storage.set('profileName', JSON.stringify(state.profileName)).catch(()=>{}); }
-async function saveProfileStats(){ await window.storage.set('profileStats', JSON.stringify(state.profileStats)).catch(()=>{}); }
-async function saveActivities(){ await window.storage.set('activities:'+state.currentDate, JSON.stringify(state.activities)).catch(()=>{}); }
+async function saveProfileName(){ await sb.from('profile').update({name: state.profileName}).eq('user_id', USER_ID); }
+async function saveProfileStats(){
+  const ps = state.profileStats;
+  await sb.from('profile').update({height:ps.height, age:ps.age, sex:ps.sex, activity_level:ps.activity, goal:ps.goal}).eq('user_id', USER_ID);
+}
+async function deleteLogEntryDB(id){ await sb.from('daily_logs').delete().eq('id', id); }
+async function deleteActivityDB(id){ await sb.from('activities').delete().eq('id', id); }
 
 function totalsForLog(){
   return state.log.reduce((acc,e)=>{acc.kcal+=e.kcal;acc.protein+=e.protein;acc.carb+=e.carb;acc.fat+=e.fat;return acc;},{kcal:0,protein:0,carb:0,fat:0});
@@ -446,7 +554,7 @@ async function removeLogEntry(id){
   });
   const captured = item.id;
   setTimeout(async ()=>{
-    if(pendingDelete && pendingDelete.item.id===captured){ await saveLog(); pendingDelete=null; }
+    if(pendingDelete && pendingDelete.item.id===captured){ await deleteLogEntryDB(captured); pendingDelete=null; }
   }, 4100);
 }
 async function removeActivity(id){
@@ -462,7 +570,7 @@ async function removeActivity(id){
   });
   const captured = item.id;
   setTimeout(async ()=>{
-    if(pendingDelete && pendingDelete.item.id===captured){ await saveActivities(); pendingDelete=null; }
+    if(pendingDelete && pendingDelete.item.id===captured){ await deleteActivityDB(captured); pendingDelete=null; }
   }, 4100);
 }
 
@@ -686,13 +794,14 @@ function wireDiario(){
       const grams = parseFloat($('#confirmGrams').value);
       if(!grams || grams<=0) return;
       const scale = grams/100;
-      const entry = {
-        id: uid(), foodId: selectedFood.id, name: selectedFood.name, grams,
+      const payload = {
+        user_id: USER_ID, log_date: state.currentDate, food_id: selectedFood.id, name: selectedFood.name, grams,
         kcal: selectedFood.kcal*scale, protein: selectedFood.protein*scale,
         carb: selectedFood.carb*scale, fat: selectedFood.fat*scale
       };
-      state.log.push(entry);
-      await saveLog();
+      const { data, error } = await sb.from('daily_logs').insert(payload).select().single();
+      if(error){ console.error(error); return; }
+      state.log.push(mapLogRow(data));
       registerFoodUsage(selectedFood.id, grams);
       selectedFood = null;
       quickAddGrams = null;
@@ -717,7 +826,7 @@ function wireLogRows(){
       const name = inp.value.trim();
       if(!name) { inp.value = entry.name; return; }
       entry.name = name;
-      await saveLog();
+      await sb.from('daily_logs').update({name}).eq('id', entry.id);
     };
   });
 
@@ -730,7 +839,7 @@ function wireLogRows(){
       entry.grams = newGrams;
       entry.kcal = rate.kcal*newGrams; entry.protein = rate.protein*newGrams;
       entry.carb = rate.carb*newGrams; entry.fat = rate.fat*newGrams;
-      await saveLog();
+      await sb.from('daily_logs').update({grams:entry.grams, kcal:entry.kcal, protein:entry.protein, carb:entry.carb, fat:entry.fat}).eq('id', entry.id);
       render();
     };
   });
@@ -741,7 +850,7 @@ function wireLogRows(){
       const val = parseFloat(inp.value);
       if(!entry || isNaN(val) || val<0) return;
       entry[inp.dataset.field] = val;
-      await saveLog();
+      await sb.from('daily_logs').update({[inp.dataset.field]: val}).eq('id', entry.id);
       render();
     };
   });
@@ -857,8 +966,10 @@ function wireAlimentos(){
       msg.className = 'msg';
       return;
     }
-    state.foods.push(...missing.map(f=>({...f, id:uid()})));
-    await saveFoods();
+    const rows = missing.map(f=>({user_id:USER_ID, name:f.name, kcal:f.kcal, protein:f.protein, carb:f.carb, fat:f.fat}));
+    const { data, error } = await sb.from('foods').insert(rows).select();
+    if(error){ msg.textContent='Erro ao sincronizar. Tente de novo.'; msg.className='msg err'; return; }
+    state.foods.push(...(data||[]).map(mapFoodRow));
     render();
     showToast(`${missing.length} alimento(s) novo(s) adicionado(s) à sua base.`);
   };
@@ -877,8 +988,9 @@ function wireAlimentos(){
     const fat = parseFloat($('#nfFat').value)||0;
     const msg = $('#nfMsg');
     if(!name || isNaN(kcal)){ msg.textContent='Preencha ao menos o nome e as calorias por 100g.'; msg.className='msg err'; return; }
-    state.foods.push({id:uid(), name, kcal, protein, carb, fat});
-    await saveFoods();
+    const { data, error } = await sb.from('foods').insert({user_id:USER_ID, name, kcal, protein, carb, fat}).select().single();
+    if(error){ msg.textContent='Erro ao salvar. Tente de novo.'; msg.className='msg err'; return; }
+    state.foods.push(mapFoodRow(data));
     msg.textContent='Alimento cadastrado!'; msg.className='msg';
     render();
     $('#newFoodForm').style.display='block';
@@ -896,7 +1008,8 @@ function wireAlimentos(){
     const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
     const msg = $('#importMsg');
     const existing = new Set(state.foods.map(f=>f.name.toLowerCase()));
-    let added=0, skipped=0, invalid=0;
+    const toInsert = [];
+    let skipped=0, invalid=0;
     for(const line of lines){
       const parts = line.split('|').map(p=>p.trim());
       if(parts.length<5){ invalid++; continue; }
@@ -904,11 +1017,14 @@ function wireAlimentos(){
       const nums = [k,p,c,g].map(v=>parseFloat(v.replace(',','.')));
       if(!name || nums.some(n=>isNaN(n))){ invalid++; continue; }
       if(existing.has(name.toLowerCase())){ skipped++; continue; }
-      state.foods.push({id:uid(), name, kcal:nums[0], protein:nums[1], carb:nums[2], fat:nums[3]});
+      toInsert.push({user_id:USER_ID, name, kcal:nums[0], protein:nums[1], carb:nums[2], fat:nums[3]});
       existing.add(name.toLowerCase());
-      added++;
     }
-    if(added>0) await saveFoods();
+    let added = 0;
+    if(toInsert.length>0){
+      const { data, error } = await sb.from('foods').insert(toInsert).select();
+      if(!error){ state.foods.push(...(data||[]).map(mapFoodRow)); added = data.length; }
+    }
     msg.textContent = `${added} importado(s). ${skipped} já existiam. ${invalid} linha(s) inválida(s).`;
     msg.className = added>0 ? 'msg' : 'msg err';
     render();
@@ -919,9 +1035,10 @@ function wireAlimentos(){
 function wireFoodDelete(){
   $$('#foodsListBox .del').forEach(btn=>{
     btn.onclick = async ()=>{
-      state.foods = state.foods.filter(f=>f.id!==btn.dataset.fid);
-      await saveFoods();
+      const id = btn.dataset.fid;
+      state.foods = state.foods.filter(f=>f.id!==id);
       render();
+      await sb.from('foods').delete().eq('id', id);
     };
   });
 }
@@ -1020,8 +1137,10 @@ function wireAtividades(){
     }
     const met = INTENSITY_MET[selectedIntensity];
     const kcal = met * state.bodyweight * (duration/60);
-    state.activities.push({id:uid(), routineId:routine.id, name:routine.name, intensity:selectedIntensity, duration, kcal});
-    await saveActivities();
+    const payload = {user_id:USER_ID, activity_date:state.currentDate, routine_id:routine.id, name:routine.name, intensity:selectedIntensity, duration, kcal};
+    const { data, error } = await sb.from('activities').insert(payload).select().single();
+    if(error){ msg.textContent='Erro ao registrar. Tente de novo.'; msg.className='msg err'; return; }
+    state.activities.push(mapActivityRow(data));
     msg.textContent = 'Atividade adicionada!'; msg.className='msg';
     render();
   };
@@ -1036,11 +1155,12 @@ function wireAtividades(){
   };
   $$('#routinesListBox .del').forEach(btn=>{
     btn.onclick = async ()=>{
-      state.routines = state.routines.filter(r=>r.id!==btn.dataset.rid);
-      await saveRoutines();
+      const id = btn.dataset.rid;
+      state.routines = state.routines.filter(r=>r.id!==id);
       render();
       $('#routinesForm').style.display='block';
       $('#toggleRoutines').textContent='ocultar ▴';
+      await sb.from('routines').delete().eq('id', id);
     };
   });
   $('#saveRoutineBtn').onclick = async ()=>{
@@ -1049,8 +1169,9 @@ function wireAtividades(){
     const intensity = $('#rtIntensity').value;
     const msg = $('#rtMsg');
     if(!name || isNaN(duration)){ msg.textContent='Preencha nome e duração padrão.'; msg.className='msg err'; return; }
-    state.routines.push({id:uid(), name, duration, intensity});
-    await saveRoutines();
+    const { data, error } = await sb.from('routines').insert({user_id:USER_ID, name, duration, intensity}).select().single();
+    if(error){ msg.textContent='Erro ao salvar. Tente de novo.'; msg.className='msg err'; return; }
+    state.routines.push(mapRoutineRow(data));
     msg.textContent='Rotina adicionada!'; msg.className='msg';
     render();
     $('#routinesForm').style.display='block';
@@ -1075,11 +1196,20 @@ function renderMensalTab(){
 function daysInMonth(monthStr){ const [y,m]=monthStr.split('-').map(Number); return new Date(y,m,0).getDate(); }
 async function generateMonthlySummary(monthStr){
   const total = daysInMonth(monthStr);
+  const monthStart = `${monthStr}-01`;
+  const monthEnd = `${monthStr}-${String(total).padStart(2,'0')}`;
+  const { data, error } = await sb.from('daily_logs').select('*')
+    .eq('user_id', USER_ID).gte('log_date', monthStart).lte('log_date', monthEnd);
+  const entriesByDate = {};
+  if(!error){
+    (data||[]).forEach(r=>{
+      (entriesByDate[r.log_date] = entriesByDate[r.log_date] || []).push(r);
+    });
+  }
   const days = [];
   for(let d=1; d<=total; d++){
     const dateStr = `${monthStr}-${String(d).padStart(2,'0')}`;
-    let entries = [];
-    try{ const r = await window.storage.get('log:'+dateStr).catch(()=>null); entries = (r&&r.value)?JSON.parse(r.value):[]; }catch(e){}
+    const entries = entriesByDate[dateStr] || [];
     const t = entries.reduce((a,e)=>{a.kcal+=e.kcal;a.protein+=e.protein;a.carb+=e.carb;a.fat+=e.fat;return a;},{kcal:0,protein:0,carb:0,fat:0});
     days.push({day:d, dateStr, logged: entries.length>0, ...t});
   }
@@ -1203,10 +1333,18 @@ function renderPerfilTab(){
       <button class="primary" id="saveTargetsBtn" style="margin-top:14px;">Salvar metas</button>
       <div class="msg" id="tgMsg"></div>
     </div>
+
+    <div class="card">
+      <h2>Conta</h2>
+      <p style="font-size:12.5px;color:var(--text-muted);margin-top:0;">Logado como ${authEmail || 'você'}.</p>
+      <button class="secondary" id="logoutBtn">Sair da conta</button>
+    </div>
   `;
 }
 
 function wirePerfil(){
+  $('#logoutBtn').onclick = async ()=>{ await logout(); };
+
   $('#saveNameBtn').onclick = async ()=>{
     const name = $('#profileNameInput').value.trim();
     state.profileName = name;
@@ -1257,4 +1395,4 @@ function wirePerfil(){
   };
 }
 
-loadAll();
+// loadAll() agora é disparada automaticamente por onAuthStateChange() acima, após o login.
