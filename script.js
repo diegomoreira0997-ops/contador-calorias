@@ -20,6 +20,7 @@ const SUPABASE_URL = 'https://enihoxjbztkhsjmrqrmz.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_JXULLB5vZ-Fvga90Ougspg_fSt3i6Xa';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let USER_ID = null; // definido após login, a partir da sessão autenticada
+
 const DEFAULT_FOODS = [
   food("Arroz branco cozido", 128, 2.5, 28, 0.2),
   food("Arroz integral cozido", 124, 2.6, 25.8, 1),
@@ -98,7 +99,6 @@ const DEFAULT_FOODS = [
   food("Refrigerante comum", 42, 0, 10.5, 0),
   food("Suco de laranja natural", 45, 0.7, 10.4, 0.2),
   food("Mel", 304, 0.4, 82.4, 0),
-  // Mais carnes e cortes
   food("Picanha grelhada", 289, 25, 0, 21),
   food("Contra-filé grelhado", 225, 32, 0, 10),
   food("Maminha grelhada", 172, 31, 0, 5),
@@ -114,13 +114,11 @@ const DEFAULT_FOODS = [
   food("Pescada grelhada", 110, 20, 0, 2.5),
   food("Sardinha em lata (óleo)", 210, 21, 0, 14),
   food("Merluza grelhada", 105, 18, 0, 3),
-  // Mais laticínios
   food("Queijo cottage", 98, 11, 3.4, 4.3),
   food("Queijo coalho grelhado", 320, 24, 1, 25),
   food("Cream cheese", 342, 6, 4, 34),
   food("Leite de amêndoas (sem açúcar)", 15, 0.5, 0.6, 1.2),
   food("Leite de coco", 230, 2.3, 6, 24),
-  // Mais grãos, farinhas e pães
   food("Cuscuz de milho cozido", 112, 2.3, 25, 0.4),
   food("Farinha de mandioca", 361, 1.6, 88, 0.3),
   food("Farofa pronta", 405, 3, 65, 14),
@@ -131,10 +129,8 @@ const DEFAULT_FOODS = [
   food("Bolacha recheada", 480, 6, 68, 20),
   food("Torrada", 407, 11, 76, 5),
   food("Cornflakes", 378, 7, 84, 0.9),
-  // Mais leguminosas
   food("Feijão branco cozido", 92, 6.5, 16.6, 0.4),
   food("Feijão fradinho cozido", 116, 7.9, 20.9, 0.6),
-  // Mais vegetais
   food("Pepino", 12, 0.7, 2.4, 0.1),
   food("Repolho cru", 25, 1.3, 5.2, 0.1),
   food("Beterraba cozida", 32, 1.3, 7.3, 0.1),
@@ -145,7 +141,6 @@ const DEFAULT_FOODS = [
   food("Vagem cozida", 27, 1.6, 6, 0.1),
   food("Rúcula", 17, 1.8, 2.1, 0.4),
   food("Milho de pipoca (sem gordura)", 387, 12.9, 74, 4.5),
-  // Mais frutas
   food("Ameixa", 46, 0.7, 11.4, 0.3),
   food("Caqui", 70, 0.6, 18.6, 0.4),
   food("Goiaba", 54, 1.1, 12.4, 0.5),
@@ -153,14 +148,12 @@ const DEFAULT_FOODS = [
   food("Coco fresco", 354, 3.3, 15, 33.5),
   food("Tangerina", 46, 0.8, 11.5, 0.2),
   food("Damasco seco", 241, 3.4, 62.6, 0.5),
-  // Bebidas
   food("Café sem açúcar", 2, 0.1, 0, 0),
   food("Cerveja comum", 43, 0.5, 3.6, 0),
   food("Vinho tinto", 85, 0.1, 2.6, 0),
   food("Água de coco", 22, 0.1, 5.3, 0),
   food("Isotônico", 24, 0, 6, 0),
   food("Achocolatado pronto (caixinha)", 62, 1.5, 11, 1.3),
-  // Doces e snacks
   food("Sorvete de massa", 207, 3.5, 24, 11),
   food("Biscoito de polvilho", 470, 4, 65, 22),
   food("Barra de cereal", 375, 6, 70, 8),
@@ -168,7 +161,6 @@ const DEFAULT_FOODS = [
   food("Paçoca", 469, 15, 45, 27),
   food("Bolo simples (fatia)", 315, 5, 50, 11),
   food("Chocolate branco", 539, 5.9, 59, 32),
-  // Pratos prontos / fast food
   food("Coxinha de frango frita", 280, 10, 25, 16),
   food("Pastel de carne frito", 300, 9, 30, 16),
   food("Esfirra de carne assada", 260, 11, 28, 11),
@@ -178,7 +170,6 @@ const DEFAULT_FOODS = [
   food("Feijoada (porção completa)", 220, 14, 15, 12),
   food("Sushi (peça, salmão)", 48, 2.3, 7.5, 1),
   food("Torta de frango (fatia)", 260, 9, 22, 15),
-  // Churrasco
   food("Linguiça calabresa assada", 280, 13, 2, 25),
   food("Coração de galinha grelhado", 219, 22, 0.1, 14),
   food("Asa de frango assada", 203, 21, 0, 13),
@@ -187,7 +178,6 @@ const DEFAULT_FOODS = [
   food("Paleta suína assada", 259, 26, 0, 17),
   food("Pão de alho assado", 330, 7, 40, 16),
   food("Vinagrete", 32, 0.8, 6, 0.5),
-  // Lanches e sanduíches
   food("Pão com queijo", 310, 13, 32, 14),
   food("Cachorro-quente completo", 280, 10, 28, 15),
   food("Misto quente", 300, 13, 30, 14),
@@ -195,14 +185,12 @@ const DEFAULT_FOODS = [
   food("X-bacon", 420, 20, 30, 25),
   food("Bauru", 320, 17, 28, 16),
   food("Sanduíche natural de frango", 230, 15, 25, 7),
-  // Salgados
   food("Pastel de queijo frito", 290, 9, 28, 16),
   food("Pastel de frango frito", 270, 10, 27, 14),
   food("Empada de frango", 320, 8, 30, 19),
   food("Risole de carne", 260, 8, 25, 14),
   food("Kibe frito", 250, 12, 18, 15),
   food("Croquete de carne", 240, 11, 20, 13),
-  // Vegetais
   food("Vegetais mistos refogados", 45, 2, 8, 1),
   food("Salada de folhas mista", 20, 1.5, 3, 0.3),
   food("Aspargos cozidos", 20, 2.2, 3.7, 0.2),
@@ -219,16 +207,13 @@ const DEFAULT_FOODS = [
   food("Inhame cozido", 118, 2.1, 27.6, 0.2),
   food("Palmito", 26, 2.2, 4.3, 0.4),
   food("Azeitona verde", 145, 1, 3.8, 15),
-  // Massas
   food("Nhoque de batata", 130, 3, 26, 1.5),
   food("Talharim cozido", 110, 3.8, 22, 0.5),
   food("Lasanha de legumes", 130, 5, 15, 5),
   food("Ravioli recheado (carne)", 170, 7, 24, 5),
-  // Sopas e caldos
   food("Sopa de legumes", 40, 1.5, 7, 0.5),
   food("Caldo verde", 90, 3, 10, 4),
   food("Canja de galinha", 65, 5, 8, 1.5),
-  // Café da manhã
   food("Panqueca americana", 227, 6, 28, 10),
   food("Waffle", 291, 7, 36, 13),
   food("Crepioca (tapioca com ovo)", 180, 10, 18, 7),
@@ -237,7 +222,6 @@ const DEFAULT_FOODS = [
   food("Tapioca com queijo e coco", 220, 5, 34, 7),
   food("Café com leite", 42, 1.8, 4.5, 1.8),
   food("Chá sem açúcar", 1, 0, 0.3, 0),
-  // Frutas
   food("Framboesa", 52, 1.2, 12, 0.7),
   food("Amora", 43, 1.4, 10, 0.5),
   food("Jaca", 95, 1.5, 23, 0.3),
@@ -248,7 +232,6 @@ const DEFAULT_FOODS = [
   food("Ameixa seca", 240, 2.2, 63.9, 0.4),
   food("Figo", 74, 0.8, 19, 0.3),
   food("Nectarina", 44, 1, 10.6, 0.3),
-  // Grãos e farinhas
   food("Arroz parboilizado cozido", 130, 2.7, 27.9, 0.3),
   food("Farinha de trigo", 364, 10, 76, 1),
   food("Farinha de aveia", 389, 17, 66, 7),
@@ -257,19 +240,16 @@ const DEFAULT_FOODS = [
   food("Pão de forma tradicional", 253, 8, 50, 3),
   food("Biscoito cream cracker", 432, 10, 74, 12),
   food("Wafer recheado", 480, 6, 65, 22),
-  // Laticínios
   food("Leite condensado", 321, 7.7, 54, 8),
   food("Creme de leite", 239, 2.6, 4.2, 25),
   food("Iogurte grego light", 59, 10, 3.6, 0.4),
   food("Whey isolado (pó)", 370, 85, 4, 1),
   food("Kefir", 58, 3.3, 4.5, 2.5),
   food("Iogurte com frutas", 88, 3.2, 15, 1.5),
-  // Bebidas
   food("Vodka", 231, 0, 0, 0),
   food("Whisky", 250, 0, 0, 0),
   food("Caipirinha", 165, 0.1, 15, 0),
   food("Água tônica", 34, 0, 8.8, 0),
-  // Doces
   food("Pudim de leite", 172, 4, 26, 5),
   food("Mousse de chocolate", 205, 4, 22, 12),
   food("Torta de limão (fatia)", 320, 5, 42, 15),
@@ -277,20 +257,17 @@ const DEFAULT_FOODS = [
   food("Cocada", 380, 3, 60, 15),
   food("Milk-shake", 195, 4.5, 30, 6),
   food("Gelatina", 62, 1.5, 14, 0),
-  // Pratos regionais
   food("Baião de dois", 160, 6, 24, 4.5),
   food("Arroz de carreteiro", 190, 10, 22, 7),
   food("Vatapá", 220, 8, 15, 15),
   food("Acarajé", 280, 8, 25, 17),
   food("Tutu de feijão", 150, 7, 20, 5),
-  // Mais proteínas
   food("Filé de tilápia empanado", 220, 15, 12, 12),
   food("Peito de frango empanado", 250, 18, 15, 13),
   food("Lombo bovino grelhado", 195, 30, 0, 8),
   food("Bacalhau dessalgado cozido", 105, 23, 0, 0.8),
   food("Polvo cozido", 92, 19, 2.2, 1),
   food("Lula grelhada", 92, 15.6, 3.1, 1.4),
-  // Molhos e condimentos
   food("Molho de tomate", 29, 1.4, 6, 0.2),
   food("Maionese", 680, 1, 3, 75),
   food("Ketchup", 112, 1.2, 27, 0.2),
@@ -340,7 +317,7 @@ let foodsSearch = '';
 let pendingDelete = null;
 let toastTimer = null;
 
-
+/* ---------- Autenticação ---------- */
 let authMode = 'login'; // 'login' | 'signup'
 let authEmail = '';
 
@@ -410,6 +387,7 @@ async function logout(){
 }
 
 let initialAuthResolved = false;
+let loadAllInFlight = null; // trava: impede duas cargas simultâneas do mesmo usuário
 
 sb.auth.onAuthStateChange((event, session)=>{
   applyAuthSession(session);
@@ -427,7 +405,7 @@ function applyAuthSession(session){
     USER_ID = session.user.id;
     authEmail = session.user.email || '';
     showMainApp();
-    loadAll();
+    loadAllGuarded();
   } else {
     USER_ID = null;
     authEmail = '';
@@ -435,8 +413,17 @@ function applyAuthSession(session){
   }
 }
 
+// Garante que loadAll() nunca rode duas vezes ao mesmo tempo (evita duplicar
+// alimentos/rotinas quando o Supabase dispara o evento de sessão mais de uma vez).
+function loadAllGuarded(){
+  if(loadAllInFlight) return loadAllInFlight;
+  loadAllInFlight = loadAll().finally(()=>{ loadAllInFlight = null; });
+  return loadAllInFlight;
+}
+
 showAuthLoading(true);
 
+/* ---------- Carga e persistência de dados ---------- */
 async function loadAll(){
   // Alimentos: se a tabela estiver vazia (primeiro uso), semeia com a base padrão
   let { data: foods } = await sb.from('foods').select('*').eq('user_id', USER_ID).order('name');
@@ -490,7 +477,6 @@ function mapRoutineRow(r){ return {id:r.id, name:r.name, duration:r.duration, in
 function mapLogRow(r){ return {id:r.id, foodId:r.food_id, name:r.name, grams:r.grams, kcal:r.kcal, protein:r.protein, carb:r.carb, fat:r.fat}; }
 function mapActivityRow(r){ return {id:r.id, routineId:r.routine_id, name:r.name, intensity:r.intensity, duration:r.duration, kcal:r.kcal}; }
 
-// Busca os dados sem mutar o estado global — usado com controle de concorrência em goToDate().
 async function fetchLogForDate(dateStr){
   const { data, error } = await sb.from('daily_logs').select('*').eq('user_id', USER_ID).eq('log_date', dateStr).order('created_at');
   if(error){ console.error(error); return []; }
@@ -501,12 +487,10 @@ async function fetchActivitiesForDate(dateStr){
   if(error){ console.error(error); return []; }
   return (data||[]).map(mapActivityRow);
 }
-// Mantidas para compatibilidade com o carregamento inicial (loadAll), que não corre risco de concorrência.
 async function loadLogForDate(dateStr){ state.log = await fetchLogForDate(dateStr); }
 async function loadActivitiesForDate(dateStr){ state.activities = await fetchActivitiesForDate(dateStr); }
 
 async function saveTargets(){ await sb.from('targets').upsert({user_id:USER_ID, ...state.targets}).select(); }
-async function saveRoutines(){ /* rotinas são persistidas individualmente (insert/delete) — ver wireAtividades */ }
 async function saveBodyweight(){ await sb.from('profile').update({bodyweight: state.bodyweight}).eq('user_id', USER_ID); }
 async function saveRecentFoods(){ await sb.from('profile').update({recent_foods: state.recentFoods}).eq('user_id', USER_ID); }
 function registerFoodUsage(foodId, grams){
@@ -522,11 +506,6 @@ async function saveProfileStats(){
 }
 async function deleteLogEntryDB(id){ await sb.from('daily_logs').delete().eq('id', id); }
 async function deleteActivityDB(id){ await sb.from('activities').delete().eq('id', id); }
-
-function totalsForLog(){
-  return state.log.reduce((acc,e)=>{acc.kcal+=e.kcal;acc.protein+=e.protein;acc.carb+=e.carb;acc.fat+=e.fat;return acc;},{kcal:0,protein:0,carb:0,fat:0});
-}
-function totalActivityKcal(){ return state.activities.reduce((s,a)=>s+a.kcal,0); }
 
 /* ---------- Toast / Undo ---------- */
 function showToast(message, onUndo){
@@ -699,6 +678,11 @@ function macroBlock(labelPair, value, target, color){
   `;
 }
 
+function totalsForLog(){
+  return state.log.reduce((acc,e)=>{acc.kcal+=e.kcal;acc.protein+=e.protein;acc.carb+=e.carb;acc.fat+=e.fat;return acc;},{kcal:0,protein:0,carb:0,fat:0});
+}
+function totalActivityKcal(){ return state.activities.reduce((s,a)=>s+a.kcal,0); }
+
 function renderLogListHtml(){
   if(isLoadingDay) return `<div class="empty-msg">Carregando…</div>`;
   if(state.log.length===0) return `<div class="empty-msg">Nenhum item registrado neste dia ainda. Use a busca acima pra adicionar.</div>`;
@@ -815,9 +799,6 @@ function wireDiario(){
   wireLogRows();
 }
 
-// Edição direta em qualquer campo da linha — sem modo expandido.
-// Trocar "gramas" reescala kcal/proteína/carbo/gordura proporcionalmente (mantém a razão por grama).
-// Editar kcal/proteína/carbo/gordura diretamente sobrescreve só aquele valor (ajuste manual pontual).
 function wireLogRows(){
   $$('#logList .name-input').forEach(inp=>{
     inp.onchange = async ()=>{
@@ -863,19 +844,15 @@ function wireLogRows(){
 let loadSeq = 0;
 let isLoadingDay = false;
 
-// Ponto único de navegação de data — evita condição de corrida quando o usuário troca de dia
-// rapidamente: cada chamada recebe um número de sequência, e só a mais recente é aplicada ao
-// estado/renderização quando a resposta do storage chega, mesmo que uma requisição mais antiga
-// demore mais para responder e resolva depois.
 async function goToDate(newDate){
   const mySeq = ++loadSeq;
   state.currentDate = newDate;
   isLoadingDay = true;
-  render(); // feedback imediato: data já muda na tela enquanto os dados carregam
+  render();
 
   const [log, activities] = await Promise.all([fetchLogForDate(newDate), fetchActivitiesForDate(newDate)]);
 
-  if(mySeq !== loadSeq) return; // uma navegação mais nova já foi disparada — descarta esta resposta
+  if(mySeq !== loadSeq) return;
   state.log = log;
   state.activities = activities;
   isLoadingDay = false;
@@ -1271,7 +1248,6 @@ function wireMensal(){
     `;
   };
 }
-
 
 /* ---------- PERFIL TAB ---------- */
 function renderPerfilTab(){
